@@ -24,7 +24,7 @@
     header .sub { font-size: 0.78rem; color: var(--muted); }
     .stack-badge { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.82rem; background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 6px 12px; color: var(--accent); }
     #canvas-wrap { position: relative; flex: 1; min-height: 340px; border: 1px solid var(--border); border-radius: 12px; overflow: hidden; background: #010409; }
-    #canvas-wrap canvas { display: block; width: 100%; height: 100%; }
+    #canvas-wrap canvas { display: block; width: 100%; height: 100%; touch-action: none; }
     .status-row { display: grid; grid-template-columns: repeat(3, 1fr); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; background: var(--panel); }
     .status-cell { padding: 10px 14px; border-right: 1px solid var(--border); }
     .status-cell:last-child { border-right: none; }
@@ -217,8 +217,8 @@
         <span><i class="dot" style="background:var(--benford)"></i> Benford landmark</span>
       </div>
     </div>
-    <footer>
-      P00 CME · Three.js · drag to orbit · scroll to zoom
+    <footer id="app-footer">
+      © 2026 · P00 CME · Three.js · drag to orbit · scroll to zoom
     </footer>
   </div>
 
@@ -233,6 +233,9 @@
   <script type="module">
     import * as THREE from "three";
     import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+
+    /** Set when the paper is published (e.g. arXiv URL). Leave empty to hide the link. */
+    const PAPER_URL = "";
 
     const PHI = (1 + Math.sqrt(5)) / 2;
     const GOLDEN = 2 * Math.PI * (2 - PHI);
@@ -1227,7 +1230,26 @@
       }
       check("log torus z balance", logPos > 300 && logNeg > 300);
 
-      console.info(`CME playground self-test: ${ok}/17 passed`);
+      const total = 17;
+      console.info(`CME playground self-test: ${ok}/${total} passed`);
+      if (ok === total) console.log("✅ All sanity checks passed");
+    }
+
+    function warnIfHeavy(n) {
+      if (n > 2000) {
+        console.warn(
+          `Performance: N=${n} > 2000 — instanced meshes + tube geometry may reduce frame rate. Consider N ≤ 2000 on mobile.`,
+        );
+      }
+    }
+
+    function updateFooter() {
+      const year = new Date().getFullYear();
+      const paper = PAPER_URL
+        ? `<a href="${PAPER_URL}" target="_blank" rel="noopener noreferrer">paper</a>`
+        : "paper forthcoming";
+      document.getElementById("app-footer").innerHTML =
+        `© ${year} · P00 CME · ${paper} · Three.js · drag to orbit · scroll to zoom`;
     }
 
     function updateUI() {
@@ -1291,6 +1313,7 @@
 
     document.getElementById("nPoints").addEventListener("input", e => {
       state.n = parseInt(e.target.value, 10);
+      warnIfHeavy(state.n);
       rebuildPoints();
     });
 
@@ -1325,7 +1348,9 @@
     }
 
     syncForm();
+    updateFooter();
     selfTest();
+    warnIfHeavy(state.n);
     rebuildPoints();
     animate();
   </script>
