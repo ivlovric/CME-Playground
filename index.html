@@ -1,0 +1,1333 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CME P00 — Interactive Playground</title>
+  <style>
+    :root {
+      --bg: #0d1117;
+      --panel: #161b22;
+      --border: #30363d;
+      --text: #c9d1d9;
+      --muted: #8b949e;
+      --accent: #58a6ff;
+      --prime: #e63946;
+      --benford: #ffd166;
+      --on: #f0f6fc;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { height: 100%; background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; }
+    .app { display: flex; flex-direction: column; height: 100vh; max-width: 1200px; margin: 0 auto; padding: 12px 16px 16px; gap: 10px; }
+    header { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+    header h1 { font-size: 1.05rem; font-weight: 600; letter-spacing: 0.02em; }
+    header .sub { font-size: 0.78rem; color: var(--muted); }
+    .stack-badge { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.82rem; background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 6px 12px; color: var(--accent); }
+    #canvas-wrap { position: relative; flex: 1; min-height: 340px; border: 1px solid var(--border); border-radius: 12px; overflow: hidden; background: #010409; }
+    #canvas-wrap canvas { display: block; width: 100%; height: 100%; }
+    .status-row { display: grid; grid-template-columns: repeat(3, 1fr); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; background: var(--panel); }
+    .status-cell { padding: 10px 14px; border-right: 1px solid var(--border); }
+    .status-cell:last-child { border-right: none; }
+    .status-cell .label { font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); margin-bottom: 3px; }
+    .status-cell .value { font-size: 0.88rem; font-weight: 500; }
+    .controls { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px 12px; display: flex; flex-direction: column; gap: 12px; }
+    .grid-controls {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 12px 14px;
+      align-items: start;
+    }
+    .control-cell {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      min-width: 0;
+    }
+    .control-cell label,
+    .control-cell .field-label {
+      font-size: 0.72rem;
+      color: var(--muted);
+      line-height: 1.2;
+    }
+    .control-cell select,
+    .control-cell input[type="range"] { cursor: pointer; }
+    .control-cell select {
+      width: 100%;
+      min-width: 0;
+      background: #21262d;
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 6px 8px;
+      font-size: 0.78rem;
+    }
+    .slider-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      min-width: 0;
+    }
+    .slider-row input[type="range"] { flex: 1; min-width: 0; accent-color: var(--accent); }
+    .toggle-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      min-height: 32px;
+      padding-top: 2px;
+    }
+    .toggle {
+      position: relative; width: 44px; height: 24px; flex-shrink: 0;
+      background: #30363d; border-radius: 999px; cursor: pointer; transition: background 0.2s;
+    }
+    .toggle.on { background: #238636; }
+    .toggle::after {
+      content: ""; position: absolute; top: 3px; left: 3px; width: 18px; height: 18px;
+      background: #6e7681; border-radius: 50%; transition: transform 0.2s, background 0.2s;
+    }
+    .toggle.on::after { transform: translateX(20px); background: var(--on); }
+    .toggle-label { font-size: 0.78rem; line-height: 1.2; }
+    .range-val {
+      flex: 0 0 auto;
+      min-width: 44px;
+      text-align: center;
+      font-size: 0.72rem;
+      font-family: ui-monospace, monospace;
+      background: #21262d;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 4px 6px;
+    }
+    .legend { display: flex; flex-wrap: wrap; gap: 12px; font-size: 0.72rem; color: var(--muted); padding-top: 2px; }
+    .legend span { display: inline-flex; align-items: center; gap: 5px; }
+    .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+    footer { font-size: 0.68rem; color: var(--muted); text-align: center; padding-top: 2px; }
+    @media (max-width: 900px) {
+      .grid-controls { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    }
+    @media (max-width: 640px) {
+      .status-row { grid-template-columns: 1fr; }
+      .status-cell { border-right: none; border-bottom: 1px solid var(--border); }
+      .status-cell:last-child { border-bottom: none; }
+      .grid-controls { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <header>
+      <div>
+        <h1>CME Geometric Contrast Analysis</h1>
+        <div class="sub">P00 Carrier Manifold Encoding — interactive stack explorer</div>
+      </div>
+      <div class="stack-badge" id="stack-code">T2-V-P-Vor</div>
+    </header>
+
+    <div id="canvas-wrap"></div>
+
+    <div class="status-row">
+      <div class="status-cell"><div class="label">Status</div><div class="value" id="status-text">Live</div></div>
+      <div class="status-cell"><div class="label">Carrier</div><div class="value" id="geom-text">Torus 𝕋²</div></div>
+      <div class="status-cell"><div class="label">Tier</div><div class="value" id="tier-text">Core §2.7</div></div>
+    </div>
+
+    <div class="controls">
+      <div class="grid-controls">
+        <div class="control-cell">
+          <label for="carrier">Carrier</label>
+          <select id="carrier">
+            <option value="T2">T2 — Torus 𝕋²</option>
+            <option value="R2">R2 — Plane ℝ²</option>
+            <option value="S2">S2 — Sphere S²</option>
+            <option value="Cyl">Cyl — Cylinder S¹×ℝ</option>
+          </select>
+        </div>
+        <div class="control-cell">
+          <label for="trajectory">Trajectory τ</label>
+          <select id="trajectory">
+            <option value="PTL">PTL — Phyllotactic (φ, Core)</option>
+            <option value="Hil">Hil — Hilbert (Open O₂)</option>
+            <option value="Log">Log — Log spiral (Open O₁)</option>
+          </select>
+        </div>
+        <div class="control-cell">
+          <label for="landmark">Landmark Λ</label>
+          <select id="landmark">
+            <option value="P">P — Primes</option>
+            <option value="Ben">Ben — Benford</option>
+            <option value="none">Off</option>
+          </select>
+        </div>
+        <div class="control-cell">
+          <label for="partition">Partition</label>
+          <select id="partition">
+            <option value="Vor">Vor — Index-Voronoi (16)</option>
+            <option value="Geo">Geo — Geodesic bins</option>
+            <option value="NVI">NVI — mod-W residue</option>
+            <option value="none">Off</option>
+          </select>
+        </div>
+        <div class="control-cell">
+          <label for="colorMode">Color by</label>
+          <select id="colorMode">
+            <option value="partition">Partition region</option>
+            <option value="trajectory">τ phase</option>
+            <option value="index">Index n</option>
+          </select>
+        </div>
+        <div class="control-cell">
+          <label for="nPoints">Points N</label>
+          <div class="slider-row">
+            <input type="range" id="nPoints" min="200" max="3000" step="100" value="1200" />
+            <span class="range-val" id="nVal">1200</span>
+          </div>
+        </div>
+        <div class="control-cell">
+          <label for="pointSize">Dot size</label>
+          <div class="slider-row">
+            <input type="range" id="pointSize" min="0.5" max="4" step="0.1" value="0.9" />
+            <span class="range-val" id="sizeVal">0.9</span>
+          </div>
+        </div>
+        <div class="control-cell">
+          <div class="toggle-row">
+            <span class="toggle-label">Show landmarks</span>
+            <div class="toggle on" id="tog-landmarks" role="switch" aria-checked="true"></div>
+          </div>
+        </div>
+        <div class="control-cell">
+          <div class="toggle-row">
+            <span class="toggle-label">Carrier outline</span>
+            <div class="toggle on" id="tog-wire" role="switch" aria-checked="true"></div>
+          </div>
+        </div>
+        <div class="control-cell">
+          <div class="toggle-row">
+            <span class="toggle-label">Auto-rotate</span>
+            <div class="toggle" id="tog-spin" role="switch" aria-checked="false"></div>
+          </div>
+        </div>
+      </div>
+      <div class="legend">
+        <span><i class="dot" style="background:#666"></i> τ(n) visit order</span>
+        <span><i class="dot" style="background:#54A24B"></i> Vor index bands (tubes)</span>
+        <span><i class="dot" style="background:#ffdd57"></i> Geo geodesic seeds</span>
+        <span><i class="dot" style="background:#33bbff"></i> NVI active gcd=1 · dim = inactive</span>
+        <span><i class="dot" style="background:var(--prime)"></i> Prime landmark</span>
+        <span><i class="dot" style="background:var(--benford)"></i> Benford landmark</span>
+      </div>
+    </div>
+    <footer>
+      P00 CME · Three.js · drag to orbit · scroll to zoom
+    </footer>
+  </div>
+
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
+      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"
+    }
+  }
+  </script>
+  <script type="module">
+    import * as THREE from "three";
+    import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+
+    const PHI = (1 + Math.sqrt(5)) / 2;
+    const GOLDEN = 2 * Math.PI * (2 - PHI);
+    const TAU = 2 * Math.PI;
+    const NVI_W = 16;
+    const VOR_N = 16;
+    const CYL_HEIGHT = 2.5;
+    const CYL_RADIUS = 1.0;
+
+    // High-contrast partition palette (Geo / NVI / Vor tubes)
+    const PARTITION_PALETTE = [
+      0xff3355, 0x33bbff, 0xffcc00, 0xaa55ff, 0x00ee88, 0xff7722,
+      0x5599ff, 0xffee33, 0xff55cc, 0x44ffaa, 0xff9944, 0x6688ff,
+      0xee2255, 0x22dddd, 0xccff44, 0x9955ff,
+    ];
+
+    function regionColor(regionId, nRegions = 16) {
+      return new THREE.Color(PARTITION_PALETTE[regionId % PARTITION_PALETTE.length]);
+    }
+
+    function nviGcd(a, b) {
+      let x = Math.abs(a), y = Math.abs(b);
+      while (y) { [x, y] = [y, x % y]; }
+      return x;
+    }
+
+    /** P00 NVI: residue r = n mod W; active iff gcd(r,W)=1 (cme_index_pe). */
+    function nviResidue(index) {
+      return (index + 1) % NVI_W;
+    }
+
+    function nviIsActive(index) {
+      const r = nviResidue(index);
+      return r !== 0 && nviGcd(r, NVI_W) === 1;
+    }
+
+    function partitionRegionCount(partition) {
+      if (partition === "NVI") return NVI_W;
+      if (partition === "Geo") return 8;
+      if (partition === "Vor") return VOR_N;
+      return 16;
+    }
+
+    function inferTier(code) {
+      const core = new Set(["T2-V-P-Vor", "R2-V-P-Vor", "S2-Fib-P-Vor"]);
+      if (core.has(code)) return "Core §2.7";
+      if (code.includes("NVI")) return "Open §6.3";
+      if (code.includes("Hil") || code.includes("Ben") || code.includes("Geo") || code.includes("Log")) return "Open §2.4";
+      return "Custom";
+    }
+
+    const CARRIER_NAMES = {
+      R2: "Plane ℝ²",
+      T2: "Torus 𝕋²",
+      S2: "Sphere S²",
+      Cyl: "Cylinder S¹×ℝ",
+    };
+
+    /** P00 §2.2: one PTL (golden φ); chart token per carrier — V on ℝ²/𝕋²/Cyl, Fib on S². */
+    function ptlChartForCarrier(carrier) {
+      return carrier === "S2" ? "Fib" : "V";
+    }
+
+    function trajectoryStackToken(carrier, trajectory) {
+      if (trajectory === "PTL") return ptlChartForCarrier(carrier);
+      return trajectory;
+    }
+
+    function carrierDisplayLabel(carrier, trajectory) {
+      const base = CARRIER_NAMES[carrier];
+      if (trajectory === "PTL") {
+        return `${base} · PTL (${ptlChartForCarrier(carrier)} chart)`;
+      }
+      return `${base} · τ = ${trajectory}`;
+    }
+
+    // ── P00 math ──
+    function isPrime(k) {
+      if (k < 2) return false;
+      for (let i = 2; i * i <= k; i++) if (k % i === 0) return false;
+      return true;
+    }
+
+    function embedTorus(u, v, R = 3, r = 1) {
+      const ring = R + r * Math.cos(v);
+      return [ring * Math.cos(u), ring * Math.sin(u), r * Math.sin(v)];
+    }
+
+    function embedSphere(theta, lam) {
+      const sinT = Math.sin(theta);
+      return [sinT * Math.cos(lam), Math.cos(theta), sinT * Math.sin(lam)];
+    }
+
+    function ptlPlanar(n) {
+      const xs = [], ys = [];
+      for (let i = 0; i < n; i++) {
+        const r = Math.sqrt(i);
+        const th = (i * GOLDEN) % TAU;
+        xs.push(r * Math.cos(th));
+        ys.push(r * Math.sin(th));
+      }
+      return { x: xs, y: ys, z: null, is3d: false, carrierKey: "planar" };
+    }
+
+    function ptlTorus(n, R = 3, r = 1) {
+      const x = [], y = [], z = [];
+      for (let i = 1; i <= n; i++) {
+        const u = (i * GOLDEN) % TAU;
+        const v = (Math.sqrt(i) / Math.sqrt(n) * TAU) % TAU;
+        const [a, b, c] = embedTorus(u, v, R, r);
+        x.push(a); y.push(b); z.push(c);
+      }
+      return { x, y, z, is3d: true, carrierKey: "torus" };
+    }
+
+    function fibSphere(n) {
+      const x = [], y = [], z = [];
+      for (let i = 0; i < n; i++) {
+        const theta = Math.acos(Math.max(-1, Math.min(1, 1 - 2 * (i + 0.5) / n)));
+        const lam = (i * GOLDEN) % TAU;
+        const [a, b, c] = embedSphere(theta, lam);
+        x.push(a); y.push(b); z.push(c);
+      }
+      return { x, y, z, is3d: true, carrierKey: "sphere" };
+    }
+
+    /** S¹×ℝ cylinder embed (P00 §6.3 / cme_index_pe): radius R, axial v∈[0,1] → Y-up Three.js. */
+    function embedCylinder(u, v01, height = CYL_HEIGHT, radius = CYL_RADIUS) {
+      const axial = v01 * height - height / 2;
+      return [radius * Math.cos(u), axial, radius * Math.sin(u)];
+    }
+
+    function ptlCylinder(n, height = CYL_HEIGHT) {
+      const x = [], y = [], z = [];
+      for (let i = 1; i <= n; i++) {
+        const u = (i * GOLDEN) % TAU;
+        const v01 = Math.sqrt(i / n);
+        const [a, b, c] = embedCylinder(u, v01, height);
+        x.push(a); y.push(b); z.push(c);
+      }
+      return { x, y, z, is3d: true, carrierKey: "cylinder" };
+    }
+
+    function hilbertCylinder(n, height = CYL_HEIGHT, fillGrid = false) {
+      const { order, grid, count } = hilbertLayout(n, fillGrid);
+      const x = [], y = [], z = [];
+      for (let i = 0; i < count; i++) {
+        const [hx, hy] = hilbertXY(i, order);
+        const u = TAU * (hx + 0.5) / grid;
+        const v01 = (hy + 0.5) / grid;
+        const [a, b, c] = embedCylinder(u, v01, height);
+        x.push(a); y.push(b); z.push(c);
+      }
+      return { x, y, z, is3d: true, carrierKey: "cylinder" };
+    }
+
+    function logCylinder(n, height = CYL_HEIGHT) {
+      const x = [], y = [], z = [];
+      const denom = Math.log1p(Math.max(n - 1, 1));
+      for (let i = 0; i < n; i++) {
+        const u = (i * GOLDEN) % TAU;
+        const v01 = Math.log1p(i) / denom;
+        const [a, b, c] = embedCylinder(u, v01, height);
+        x.push(a); y.push(b); z.push(c);
+      }
+      return { x, y, z, is3d: true, carrierKey: "cylinder" };
+    }
+
+    function hilbertOrder(n) {
+      return Math.max(4, Math.ceil(Math.log2(Math.sqrt(Math.max(n, 1)))));
+    }
+
+    /** P00 fig8: Hilbert fills entire 2^order × 2^order chart when fillGrid=true. */
+    function hilbertLayout(n, fillGrid = false) {
+      const order = hilbertOrder(n);
+      const grid = 1 << order;
+      const count = fillGrid ? grid * grid : n;
+      return { order, grid, count };
+    }
+
+    function hilbertXY(index, order) {
+      const grid = 1 << order;
+      let x = 0, y = 0, t = index, s = 1;
+      while (s < grid) {
+        const rx = (t >> 1) & 1, ry = (t ^ rx) & 1;
+        if (ry === 0) {
+          if (rx === 1) { x = s - 1 - x; y = s - 1 - y; }
+          [x, y] = [y, x];
+        }
+        x += s * rx; y += s * ry;
+        t >>= 2; s <<= 1;
+      }
+      return [x, y];
+    }
+
+    function hilbertPlanar(n, scale = 38, fillGrid = false) {
+      const { order, grid, count } = hilbertLayout(n, fillGrid);
+      const x = [], y = [];
+      for (let i = 0; i < count; i++) {
+        const [hx, hy] = hilbertXY(i, order);
+        x.push(((hx + 0.5) / grid) * 2 * scale - scale);
+        y.push(((hy + 0.5) / grid) * 2 * scale - scale);
+      }
+      return { x, y, z: null, is3d: false, carrierKey: "planar" };
+    }
+
+    function hilbertTorus(n, R = 3, r = 1, fillGrid = false) {
+      const { order, grid, count } = hilbertLayout(n, fillGrid);
+      const x = [], y = [], z = [];
+      for (let i = 0; i < count; i++) {
+        const [hx, hy] = hilbertXY(i, order);
+        const u = TAU * (hx + 0.5) / grid;
+        const v = TAU * (hy + 0.5) / grid;
+        const [a, b, c] = embedTorus(u, v, R, r);
+        x.push(a); y.push(b); z.push(c);
+      }
+      return { x, y, z, is3d: true, carrierKey: "torus" };
+    }
+
+    function hilbertSphere(n, fillGrid = false) {
+      const { order, grid, count } = hilbertLayout(n, fillGrid);
+      const x = [], y = [], z = [];
+      for (let i = 0; i < count; i++) {
+        const [hx, hy] = hilbertXY(i, order);
+        const lam = TAU * (hx + 0.5) / grid;
+        const theta = Math.PI * (hy + 0.5) / grid;
+        const [a, b, c] = embedSphere(theta, lam);
+        x.push(a); y.push(b); z.push(c);
+      }
+      return { x, y, z, is3d: true, carrierKey: "sphere" };
+    }
+
+    function logPlanar(n, scale = 38) {
+      const x = [], y = [];
+      const denom = Math.log1p(Math.max(n - 1, 1));
+      for (let i = 0; i < n; i++) {
+        const r = Math.log1p(i) / denom * scale;
+        const th = (i * GOLDEN) % TAU;
+        x.push(r * Math.cos(th)); y.push(r * Math.sin(th));
+      }
+      return { x, y, z: null, is3d: false, carrierKey: "planar" };
+    }
+
+    /** LST on 𝕋² (§2.4): θₙ = nφ → poloidal v; rₙ = log(1+n)/log(1+N) → meridional u. */
+    function logTorus(n, R = 3, r = 1) {
+      const x = [], y = [], z = [];
+      const denom = Math.log1p(Math.max(n - 1, 1));
+      for (let i = 0; i < n; i++) {
+        const u = Math.log1p(i) / denom * TAU;
+        const v = (i * GOLDEN) % TAU;
+        const [a, b, c] = embedTorus(u, v, R, r);
+        x.push(a); y.push(b); z.push(c);
+      }
+      return { x, y, z, is3d: true, carrierKey: "torus" };
+    }
+
+    function logSphere(n) {
+      const x = [], y = [], z = [];
+      const denom = Math.log1p(Math.max(n - 1, 1));
+      for (let i = 0; i < n; i++) {
+        const theta = Math.acos(Math.max(-1, Math.min(1, 1 - 2 * Math.log1p(i) / denom)));
+        const lam = (i * GOLDEN) % TAU;
+        const [a, b, c] = embedSphere(theta, lam);
+        x.push(a); y.push(b); z.push(c);
+      }
+      return { x, y, z, is3d: true, carrierKey: "sphere" };
+    }
+
+    function computeTrajectory(carrier, traj, n) {
+      const chart = trajectoryStackToken(carrier, traj);
+      const hilFill = chart === "Hil"; // P00 fig8: fill_grid for Hilbert charts
+      const map = {
+        "R2-V": () => ptlPlanar(n),
+        "R2-Hil": () => hilbertPlanar(n, 38, hilFill),
+        "R2-Log": () => logPlanar(n),
+        "T2-V": () => ptlTorus(n),
+        "T2-Hil": () => hilbertTorus(n, 3, 1, hilFill),
+        "T2-Log": () => logTorus(n),
+        "S2-Fib": () => fibSphere(n),
+        "S2-Hil": () => hilbertSphere(n, hilFill),
+        "S2-Log": () => logSphere(n),
+        "Cyl-V": () => ptlCylinder(n),
+        "Cyl-Hil": () => hilbertCylinder(n, CYL_HEIGHT, hilFill),
+        "Cyl-Log": () => logCylinder(n),
+      };
+      const fn = map[`${carrier}-${chart}`];
+      if (!fn) {
+        console.warn(`No trajectory ${carrier}-${chart}; falling back to PTL.`);
+        return ptlTorus(n);
+      }
+      return fn();
+    }
+
+    function regionVor(n, nRegions = VOR_N) {
+      const seeds = Array.from({ length: nRegions }, (_, i) =>
+        Math.min(Math.floor((i + 0.5) * n / nRegions), n - 1));
+      return Array.from({ length: n }, (_, i) => {
+        let best = 0, bestD = Infinity;
+        for (let j = 0; j < nRegions; j++) {
+          const d = Math.abs(i - seeds[j]);
+          if (d < bestD) { bestD = d; best = j; }
+        }
+        return best;
+      });
+    }
+
+    function ptlPhase(n) {
+      return Array.from({ length: n }, (_, i) => (i * GOLDEN) % TAU);
+    }
+
+    function benfordMask(n) {
+      const digits = new Set([1, 2, 3]);
+      return Array.from({ length: n }, (_, i) => digits.has(parseInt(String(i + 1)[0], 10)));
+    }
+
+    function primeMask(n) {
+      return Array.from({ length: n }, (_, i) => isPrime(i));
+    }
+
+    function periodicDelta(a, b, period = TAU) {
+      const d = Math.abs(a - b);
+      return Math.min(d, period - d);
+    }
+
+    function torusUVFromXYZ(x, y, z, R = 3, r = 1) {
+      const u = ((Math.atan2(y, x) % TAU) + TAU) % TAU;
+      const ring = Math.hypot(x, y);
+      const v = ((Math.atan2(z, ring - R) % TAU) + TAU) % TAU;
+      return { u, v };
+    }
+
+    function sphereAnglesFromXYZ(x, y, z) {
+      const theta = Math.acos(Math.max(-1, Math.min(1, y)));
+      const lam = ((Math.atan2(z, x) % TAU) + TAU) % TAU;
+      return { theta, lam };
+    }
+
+    function cylinderUVFromXYZ(x, y, z, height = CYL_HEIGHT) {
+      const u = ((Math.atan2(z, x) % TAU) + TAU) % TAU;
+      const v01 = (y + height / 2) / height;
+      return { u, v01 };
+    }
+
+    /** k seeds on chart domain of M (spatial geodesic bins — not index bands). */
+    function geoSpatialSeedGrid(k) {
+      const cols = Math.ceil(Math.sqrt(k));
+      const rows = Math.ceil(k / cols);
+      const cells = [];
+      for (let row = 0; row < rows; row++) {
+        for (let col = 0; col < cols; col++) {
+          cells.push({
+            u: TAU * (col + 0.5) / cols,
+            v: TAU * (row + 0.5) / rows,
+            theta: Math.PI * (row + 0.5) / (rows + 1),
+            lam: TAU * (col + 0.5) / cols,
+            v01: (row + 0.5) / rows,
+            col,
+            row,
+            cols,
+            rows,
+          });
+        }
+      }
+      return cells.slice(0, k);
+    }
+
+    function geoSpatialSeedsPlanar(x, y, k) {
+      let xmin = Infinity, xmax = -Infinity, ymin = Infinity, ymax = -Infinity;
+      for (let i = 0; i < x.length; i++) {
+        xmin = Math.min(xmin, x[i]); xmax = Math.max(xmax, x[i]);
+        ymin = Math.min(ymin, y[i]); ymax = Math.max(ymax, y[i]);
+      }
+      const pad = 0.05;
+      const dx = (xmax - xmin) * pad || 1;
+      const dy = (ymax - ymin) * pad || 1;
+      xmin -= dx; xmax += dx; ymin -= dy; ymax += dy;
+      return geoSpatialSeedGrid(k).map(cell => ({
+        x: xmin + (xmax - xmin) * (cell.col + 0.5) / cell.cols,
+        y: ymin + (ymax - ymin) * (cell.row + 0.5) / cell.rows,
+      }));
+    }
+
+    function geoEmbeddedSeedSceneCoords(carrierKey, pos, k = 8) {
+      const { x, y, z } = pos;
+      if (carrierKey === "planar") {
+        return geoSpatialSeedsPlanar(x, y, k).map(s => {
+          const [px, py, pz] = toSceneCoords(s.x, s.y, 0, false);
+          return new THREE.Vector3(px, py, pz);
+        });
+      }
+      if (carrierKey === "torus") {
+        return geoSpatialSeedGrid(k).map(cell => {
+          const [a, b, c] = embedTorus(cell.u, cell.v);
+          const [px, py, pz] = toSceneCoords(a, b, c, true);
+          return new THREE.Vector3(px, py, pz);
+        });
+      }
+      if (carrierKey === "sphere") {
+        return geoSpatialSeedGrid(k).map(cell => {
+          const [a, b, c] = embedSphere(cell.theta, cell.lam);
+          const [px, py, pz] = toSceneCoords(a, b, c, true);
+          return new THREE.Vector3(px, py, pz);
+        });
+      }
+      if (carrierKey === "cylinder") {
+        return geoSpatialSeedGrid(k).map(cell => {
+          const [a, b, c] = embedCylinder(cell.u, cell.v01);
+          const [px, py, pz] = toSceneCoords(a, b, c, true);
+          return new THREE.Vector3(px, py, pz);
+        });
+      }
+      return [];
+    }
+
+    /** Open Geo (O₁): nearest spatial chart seed on carrier M — distinct from index NVI. */
+    function regionGeo(pos, n, k = 8) {
+      const { x, y, z, carrierKey } = pos;
+      const regions = new Array(n).fill(0);
+
+      if (carrierKey === "planar") {
+        const seeds = geoSpatialSeedsPlanar(x, y, k);
+        for (let i = 0; i < n; i++) {
+          let best = 0, bestD = Infinity;
+          for (let s = 0; s < seeds.length; s++) {
+            const d = Math.hypot(x[i] - seeds[s].x, y[i] - seeds[s].y);
+            if (d < bestD) { bestD = d; best = s; }
+          }
+          regions[i] = best;
+        }
+        return regions;
+      }
+
+      if (carrierKey === "torus") {
+        const seeds = geoSpatialSeedGrid(k);
+        const uArr = [], vArr = [];
+        for (let i = 0; i < n; i++) {
+          const uv = torusUVFromXYZ(x[i], y[i], z[i]);
+          uArr.push(uv.u);
+          vArr.push(uv.v);
+        }
+        for (let i = 0; i < n; i++) {
+          let best = 0, bestD = Infinity;
+          for (let s = 0; s < seeds.length; s++) {
+            const du = periodicDelta(uArr[i], seeds[s].u);
+            const dv = periodicDelta(vArr[i], seeds[s].v);
+            const d = Math.sqrt(du * du + dv * dv);
+            if (d < bestD) { bestD = d; best = s; }
+          }
+          regions[i] = best;
+        }
+        return regions;
+      }
+
+      if (carrierKey === "sphere") {
+        const seeds = geoSpatialSeedGrid(k);
+        const thetaArr = [], lamArr = [];
+        for (let i = 0; i < n; i++) {
+          const ang = sphereAnglesFromXYZ(x[i], y[i], z[i]);
+          thetaArr.push(ang.theta);
+          lamArr.push(ang.lam);
+        }
+        for (let i = 0; i < n; i++) {
+          let best = 0, bestD = Infinity;
+          for (let s = 0; s < seeds.length; s++) {
+            const dlam = periodicDelta(lamArr[i], seeds[s].lam);
+            const dth = Math.abs(thetaArr[i] - seeds[s].theta);
+            const d = Math.sqrt(dth * dth + dlam * dlam);
+            if (d < bestD) { bestD = d; best = s; }
+          }
+          regions[i] = best;
+        }
+        return regions;
+      }
+
+      if (carrierKey === "cylinder") {
+        const seeds = geoSpatialSeedGrid(k);
+        const uArr = [], vArr = [];
+        for (let i = 0; i < n; i++) {
+          const uv = cylinderUVFromXYZ(x[i], y[i], z[i]);
+          uArr.push(uv.u);
+          vArr.push(uv.v01);
+        }
+        for (let i = 0; i < n; i++) {
+          let best = 0, bestD = Infinity;
+          for (let s = 0; s < seeds.length; s++) {
+            const du = periodicDelta(uArr[i], seeds[s].u);
+            const dv = Math.abs(vArr[i] - seeds[s].v01);
+            const d = Math.sqrt(du * du + dv * dv);
+            if (d < bestD) { bestD = d; best = s; }
+          }
+          regions[i] = best;
+        }
+        return regions;
+      }
+
+      // Fallback: R³ nearest seed among spatial embedded grid seeds
+      const seedVecs = geoEmbeddedSeedSceneCoords(carrierKey, pos, k);
+      for (let i = 0; i < n; i++) {
+        let best = 0, bestD = Infinity;
+        for (let s = 0; s < seedVecs.length; s++) {
+          const d = Math.hypot(x[i] - seedVecs[s].x, y[i] - seedVecs[s].y, z[i] - seedVecs[s].z);
+          if (d < bestD) { bestD = d; best = s; }
+        }
+        regions[i] = best;
+      }
+      return regions;
+    }
+
+    function regionNvi(n, W = NVI_W) {
+      return Array.from({ length: n }, (_, i) => nviResidue(i));
+    }
+
+    function colorForPartition(i, partition, field, nRegions) {
+      if (partition === "NVI") {
+        const col = regionColor(field[i], NVI_W);
+        if (!nviIsActive(i)) col.lerp(new THREE.Color(0x1a2030), 0.65);
+        return col;
+      }
+      return regionColor(field[i], nRegions);
+    }
+
+    function scaleForPartition(i, partition, baseMul) {
+      if (partition === "NVI") return baseMul * (nviIsActive(i) ? 1.55 : 0.7);
+      if (partition === "Geo") return baseMul * 1.35;
+      return baseMul;
+    }
+
+    function buildStackCode(carrier, trajectory, landmark, partition) {
+      const trajTok = trajectoryStackToken(carrier, trajectory);
+      const landTok = landmark === "none" ? "—" : landmark;
+      const partTok = partition === "none" ? "—" : partition;
+      if (landTok === "—" && partTok === "—") return `${carrier}-${trajTok}`;
+      return `${carrier}-${trajTok}-${landTok}-${partTok}`;
+    }
+
+    function twilightColor(t) {
+      const x = t / TAU;
+      return new THREE.Color(
+        0.5 + 0.5 * Math.cos(TAU * (x + 0.0)),
+        0.5 + 0.5 * Math.cos(TAU * (x + 0.33)),
+        0.5 + 0.5 * Math.cos(TAU * (x + 0.67)),
+      );
+    }
+
+    /** Three.js coords: 3D identity; planar τ lives on XZ ground (y = 0). */
+    function toSceneCoords(x, y, z, is3d) {
+      return is3d ? [x, y, z] : [x, 0, y];
+    }
+
+    function dotScale(is3d, sizeMul) {
+      const base = is3d ? 0.022 : 0.055;
+      return base * sizeMul;
+    }
+
+    function planarExtent(n, traj) {
+      if (traj === "Hil" || traj === "Log") return 38;
+      return Math.sqrt(Math.max(n - 1, 1));
+    }
+
+    // ── Three.js scene ──
+    const wrap = document.getElementById("canvas-wrap");
+    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false, powerPreference: "high-performance" });
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.setClearColor(0x010409);
+    wrap.appendChild(renderer.domElement);
+
+    const scene = new THREE.Scene();
+
+    const camera = new THREE.PerspectiveCamera(45, 1, 0.1, 200);
+    camera.position.set(8, 6, 10);
+
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.08;
+    controls.minDistance = 2;
+    controls.maxDistance = 50;
+
+    const ambient = new THREE.AmbientLight(0xffffff, 0.85);
+    scene.add(ambient);
+
+    const grid = new THREE.GridHelper(80, 40, 0x2a2a2a, 0x151515);
+    grid.position.y = 0;
+    scene.add(grid);
+
+    const contentGroup = new THREE.Group();
+    scene.add(contentGroup);
+
+    const dotGeo = new THREE.IcosahedronGeometry(1, 0);
+    const lmGeo = new THREE.IcosahedronGeometry(1, 0);
+
+    let dotsMesh = null;
+    let landmarkMesh = null;
+    let partitionGroup = new THREE.Group();
+    const carrierGroup = new THREE.Group();
+    let cameraFittedOnce = false;
+    contentGroup.add(partitionGroup);
+    contentGroup.add(carrierGroup);
+
+    const _mat4 = new THREE.Matrix4();
+    const _pos = new THREE.Vector3();
+    const _quat = new THREE.Quaternion();
+    const _scl = new THREE.Vector3();
+    const _color = new THREE.Color();
+
+    const state = {
+      carrier: "T2", trajectory: "PTL", landmark: "P", partition: "Vor",
+      colorMode: "partition", n: 1200, renderN: 1200, pointSize: 0.9,
+      showLandmarks: true, showWire: true, spin: false,
+    };
+
+    function disposeContentMesh(mesh) {
+      if (!mesh) return;
+      contentGroup.remove(mesh);
+      if (mesh.isInstancedMesh) {
+        mesh.material.dispose();
+      } else {
+        mesh.geometry.dispose();
+        mesh.material.dispose();
+      }
+    }
+
+    function disposeMesh(mesh) {
+      disposeContentMesh(mesh);
+    }
+
+    function makeCarrierOutline(carrier, n) {
+      carrierGroup.clear();
+      if (!state.showWire) return;
+
+      const lineMat = new THREE.LineBasicMaterial({ color: 0x555555, transparent: true, opacity: 0.7 });
+
+      if (carrier === "T2") {
+        const geo = new THREE.TorusGeometry(3, 1, 32, 72);
+        carrierGroup.add(new THREE.LineSegments(new THREE.EdgesGeometry(geo, 10), lineMat));
+        geo.dispose();
+      } else if (carrier === "S2") {
+        const geo = new THREE.SphereGeometry(1.0, 32, 24);
+        carrierGroup.add(new THREE.LineSegments(new THREE.EdgesGeometry(geo, 12), lineMat));
+        geo.dispose();
+      } else if (carrier === "Cyl") {
+        const geo = new THREE.CylinderGeometry(CYL_RADIUS, CYL_RADIUS, CYL_HEIGHT, 48, 1, true);
+        carrierGroup.add(new THREE.LineSegments(new THREE.EdgesGeometry(geo, 8), lineMat));
+        geo.dispose();
+      } else {
+        const rMax = planarExtent(n, state.trajectory) * 1.05;
+        const pts = [];
+        for (let i = 0; i <= 96; i++) {
+          const t = (i / 96) * TAU;
+          pts.push(new THREE.Vector3(rMax * Math.cos(t), 0, rMax * Math.sin(t)));
+        }
+        carrierGroup.add(new THREE.LineLoop(new THREE.BufferGeometry().setFromPoints(pts), lineMat));
+      }
+    }
+
+    function clearPartitionBands() {
+      while (partitionGroup.children.length) {
+        const child = partitionGroup.children[0];
+        partitionGroup.remove(child);
+        if (child.isInstancedMesh) {
+          child.material.dispose();
+        } else {
+          child.geometry.dispose();
+          child.material.dispose();
+        }
+      }
+    }
+
+    function addBandTube(curvePoints, regionId, nRegions, tubeRadius) {
+      if (curvePoints.length < 2) return;
+      const curve = new THREE.CatmullRomCurve3(curvePoints, false, "centripetal", 0.15);
+      const segs = Math.max(curvePoints.length * 3, 16);
+      const tubeGeo = new THREE.TubeGeometry(curve, segs, tubeRadius, 5, false);
+      const tubeMat = new THREE.MeshBasicMaterial({
+        color: regionColor(regionId, nRegions),
+        toneMapped: false,
+      });
+      partitionGroup.add(new THREE.Mesh(tubeGeo, tubeMat));
+    }
+
+    /** Vor → index tubes; Geo → gold spatial chart seeds; NVI → residue ring legend dots. */
+    function buildPartitionOverlay(pos, partitionField) {
+      clearPartitionBands();
+      if (!partitionField || state.colorMode !== "partition") return;
+
+      const { x, y, z, is3d, carrierKey } = pos;
+      const n = partitionField.length;
+      const toVec = (i) => {
+        const [px, py, pz] = toSceneCoords(x[i], y[i], is3d ? z[i] : 0, is3d);
+        return new THREE.Vector3(px, py, pz);
+      };
+      const baseS = dotScale(is3d, state.pointSize);
+
+      if (state.partition === "Vor") {
+        const nRegions = Math.max(...partitionField) + 1;
+        const tubeRadius = baseS * 0.5;
+        for (let r = 0; r < nRegions; r++) {
+          const indices = [];
+          for (let i = 0; i < n; i++) {
+            if (partitionField[i] === r) indices.push(i);
+          }
+          addBandTube(indices.map(toVec), r, nRegions, tubeRadius);
+        }
+        const seeds = Array.from({ length: VOR_N }, (_, i) =>
+          Math.min(Math.floor((i + 0.5) * n / VOR_N), n - 1));
+        addSeedMarkers(seeds.map(toVec), 0xffffff, baseS * 1.6);
+      } else if (state.partition === "Geo") {
+        const seedVecs = geoEmbeddedSeedSceneCoords(carrierKey, pos, 8);
+        addSeedMarkers(seedVecs, 0xffdd57, baseS * 2.4);
+      } else if (state.partition === "NVI") {
+        // One bright anchor per residue class at its first visit index
+        const seen = new Set();
+        const anchors = [];
+        const anchorColors = [];
+        for (let i = 0; i < n; i++) {
+          const r = nviResidue(i);
+          if (seen.has(r)) continue;
+          seen.add(r);
+          anchors.push(toVec(i));
+          anchorColors.push(regionColor(r, NVI_W));
+        }
+        addSeedMarkers(anchors, null, baseS * 1.9, anchorColors);
+      }
+    }
+
+    function addSeedMarkers(vectors, color, scale, colors = null) {
+      if (!vectors.length) return;
+      const seedMat = new THREE.MeshBasicMaterial({ color: color ?? 0xffffff, toneMapped: false });
+      const seedMesh = new THREE.InstancedMesh(new THREE.IcosahedronGeometry(1, 0), seedMat, vectors.length);
+      for (let i = 0; i < vectors.length; i++) {
+        _pos.copy(vectors[i]);
+        _scl.setScalar(scale);
+        _mat4.compose(_pos, _quat, _scl);
+        seedMesh.setMatrixAt(i, _mat4);
+        if (colors) {
+          seedMesh.setColorAt(i, colors[i]);
+        }
+      }
+      seedMesh.instanceMatrix.needsUpdate = true;
+      if (colors && seedMesh.instanceColor) seedMesh.instanceColor.needsUpdate = true;
+      partitionGroup.add(seedMesh);
+    }
+
+    function buildInstancedDots(positions, colors, baseScale, scaleFactors = null) {
+      const n = positions.length / 3;
+      const mat = new THREE.MeshBasicMaterial({ toneMapped: false, color: 0xffffff });
+      const mesh = new THREE.InstancedMesh(dotGeo, mat, n);
+      mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+
+      for (let i = 0; i < n; i++) {
+        _pos.set(positions[i * 3], positions[i * 3 + 1], positions[i * 3 + 2]);
+        _scl.setScalar(baseScale * (scaleFactors ? scaleFactors[i] : 1));
+        _mat4.compose(_pos, _quat, _scl);
+        mesh.setMatrixAt(i, _mat4);
+        _color.setRGB(colors[i * 3], colors[i * 3 + 1], colors[i * 3 + 2]);
+        mesh.setColorAt(i, _color);
+      }
+      mesh.instanceMatrix.needsUpdate = true;
+      if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
+      return mesh;
+    }
+
+    function updateDotScales() {
+      if (!dotsMesh) return;
+      const is3d = state.carrier !== "R2";
+      const s = dotScale(is3d, state.pointSize);
+      for (let i = 0; i < dotsMesh.count; i++) {
+        dotsMesh.getMatrixAt(i, _mat4);
+        _mat4.decompose(_pos, _quat, _scl);
+        _scl.setScalar(s);
+        _mat4.compose(_pos, _quat, _scl);
+        dotsMesh.setMatrixAt(i, _mat4);
+      }
+      dotsMesh.instanceMatrix.needsUpdate = true;
+
+      if (landmarkMesh) {
+        const ls = s * 1.8;
+        for (let i = 0; i < landmarkMesh.count; i++) {
+          landmarkMesh.getMatrixAt(i, _mat4);
+          _mat4.decompose(_pos, _quat, _scl);
+          _scl.setScalar(ls);
+          _mat4.compose(_pos, _quat, _scl);
+          landmarkMesh.setMatrixAt(i, _mat4);
+        }
+        landmarkMesh.instanceMatrix.needsUpdate = true;
+      }
+    }
+
+    function rebuildPoints() {
+      const pos = computeTrajectory(state.carrier, state.trajectory, state.n);
+      const n = pos.x.length;
+      const { x, y, z, is3d } = pos;
+
+      const positions = new Float32Array(n * 3);
+      const colors = new Float32Array(n * 3);
+      const baseColor = new THREE.Color(0x606870);
+
+      let partitionField = null;
+      if (state.partition === "Vor") partitionField = regionVor(n);
+      else if (state.partition === "Geo") partitionField = regionGeo(pos, n);
+      else if (state.partition === "NVI") partitionField = regionNvi(n);
+
+      const phase = ptlPhase(n);
+      const colorByPartition = state.colorMode === "partition" && state.partition !== "none";
+      const showVorBands = state.partition === "Vor" && colorByPartition;
+      const showSpatialPartition = (state.partition === "Geo" || state.partition === "NVI") && colorByPartition;
+      const nRegions = partitionRegionCount(state.partition);
+      const scaleFactors = colorByPartition ? new Float32Array(n) : null;
+      const baseDot = dotScale(is3d, state.pointSize);
+
+      for (let i = 0; i < n; i++) {
+        const [px, py, pz] = toSceneCoords(x[i], y[i], is3d ? z[i] : 0, is3d);
+        positions[i * 3] = px;
+        positions[i * 3 + 1] = py;
+        positions[i * 3 + 2] = pz;
+
+        let col;
+        if (state.colorMode === "trajectory") col = twilightColor(phase[i]);
+        else if (state.colorMode === "index") col = new THREE.Color().setHSL(i / n, 0.75, 0.52);
+        else if (partitionField && showVorBands) col = baseColor;
+        else if (partitionField && colorByPartition) col = colorForPartition(i, state.partition, partitionField, nRegions);
+        else col = new THREE.Color(0x90caf9);
+
+        colors[i * 3] = col.r;
+        colors[i * 3 + 1] = col.g;
+        colors[i * 3 + 2] = col.b;
+
+        if (scaleFactors) {
+          let mul = showVorBands ? 0.55 : 1.25;
+          if (showSpatialPartition) mul = scaleForPartition(i, state.partition, 1.25);
+          scaleFactors[i] = mul;
+        }
+      }
+
+      buildPartitionOverlay(pos, colorByPartition ? partitionField : null);
+
+      disposeMesh(dotsMesh);
+      dotsMesh = buildInstancedDots(positions, colors, baseDot, scaleFactors);
+      contentGroup.add(dotsMesh);
+
+      disposeMesh(landmarkMesh);
+      landmarkMesh = null;
+      if (state.showLandmarks && state.landmark !== "none") {
+        const mask = state.landmark === "P" ? primeMask(n) : benfordMask(n);
+        const lmPos = [], lmCol = [];
+        const lmColor = state.landmark === "P" ? new THREE.Color(0xff3344) : new THREE.Color(0xffcc33);
+        for (let i = 0; i < n; i++) {
+          if (!mask[i]) continue;
+          const [px, py, pz] = toSceneCoords(x[i], y[i], is3d ? z[i] : 0, is3d);
+          lmPos.push(px, py, pz);
+          lmCol.push(lmColor.r, lmColor.g, lmColor.b);
+        }
+        const lmCount = lmPos.length / 3;
+        if (lmCount > 0) {
+          const lmat = new THREE.MeshBasicMaterial({ toneMapped: false });
+          landmarkMesh = new THREE.InstancedMesh(lmGeo, lmat, lmCount);
+          for (let i = 0; i < lmCount; i++) {
+            _pos.set(lmPos[i * 3], lmPos[i * 3 + 1], lmPos[i * 3 + 2]);
+            _scl.setScalar(dotScale(is3d, state.pointSize) * 1.8);
+            _mat4.compose(_pos, _quat, _scl);
+            landmarkMesh.setMatrixAt(i, _mat4);
+            _color.setRGB(lmCol[i * 3], lmCol[i * 3 + 1], lmCol[i * 3 + 2]);
+            landmarkMesh.setColorAt(i, _color);
+          }
+          landmarkMesh.instanceMatrix.needsUpdate = true;
+          if (landmarkMesh.instanceColor) landmarkMesh.instanceColor.needsUpdate = true;
+          contentGroup.add(landmarkMesh);
+        }
+      }
+
+      makeCarrierOutline(state.carrier, n);
+      updateGridForCarrier();
+      if (!cameraFittedOnce) {
+        fitCamera(pos);
+        cameraFittedOnce = true;
+      }
+      state.renderN = n;
+      updateUI();
+    }
+
+    function updateGridForCarrier() {
+      if (state.carrier === "R2") {
+        grid.visible = true;
+        grid.position.y = 0;
+      } else {
+        grid.visible = state.carrier !== "S2";
+        grid.position.y = state.carrier === "Cyl" ? -1.5 : -3.5;
+      }
+    }
+
+    function fitCamera(pos) {
+      const { x, y, z, is3d } = pos;
+      const box = new THREE.Box3();
+      for (let i = 0; i < x.length; i++) {
+        const [px, py, pz] = toSceneCoords(x[i], y[i], is3d ? z[i] : 0, is3d);
+        box.expandByPoint(new THREE.Vector3(px, py, pz));
+      }
+      box.expandByScalar(dotScale(is3d, state.pointSize) * 2);
+      const center = box.getCenter(new THREE.Vector3());
+      const size = box.getSize(new THREE.Vector3());
+      const radius = Math.max(size.x, size.y, size.z) * 0.55;
+
+      controls.target.copy(center);
+      controls.maxPolarAngle = Math.PI;
+
+      if (state.carrier === "R2") {
+        const dist = Math.max(radius * 2.8, 8);
+        camera.position.set(center.x, center.y + dist, center.z + dist * 0.15);
+        controls.minDistance = dist * 0.25;
+        controls.maxDistance = dist * 4;
+      } else {
+        const dist = Math.max(radius * 2.4, 6);
+        camera.position.set(
+          center.x + dist * 0.55,
+          center.y + dist * 0.42,
+          center.z + dist * 0.65,
+        );
+        controls.minDistance = dist * 0.2;
+        controls.maxDistance = dist * 5;
+      }
+      updateGridForCarrier();
+      camera.lookAt(center);
+      controls.update();
+    }
+
+    /** Sanity checks — logged once on load. */
+    function selfTest() {
+      const eps = 1e-9;
+      let ok = 0;
+      const check = (name, cond) => { if (cond) ok++; else console.warn("FAIL:", name); };
+
+      const [tx, ty, tz] = embedTorus(0, 0);
+      check("torus surface u=0,v=0", Math.abs(Math.hypot(Math.hypot(tx, ty) - 4, tz) - 0) < 1e-6);
+
+      const [sx, sy, sz] = embedSphere(0.5, 0.3);
+      check("sphere unit", Math.abs(sx * sx + sy * sy + sz * sz - 1) < eps);
+
+      const vor = regionVor(100);
+      check("vor regions", vor.length === 100 && vor[0] === 0 && new Set(vor).size > 1);
+
+      const geo = regionGeo(ptlPlanar(200), 200);
+      check("geo bins", geo.length === 200 && new Set(geo).size >= 4);
+
+      const t2pos = ptlTorus(800);
+      const geoT = regionGeo(t2pos, 800);
+      const nviT = regionNvi(800);
+      let geoNviDiff = 0;
+      for (let i = 0; i < 800; i++) if (geoT[i] !== nviT[i] % 8) geoNviDiff++;
+      check("geo != nvi torus", geoNviDiff / 800 > 0.5);
+
+      regionNvi(64);
+      check("nvi mod", nviResidue(15) === 0 && nviResidue(0) === 1);
+      check("nvi active", nviIsActive(0) && !nviIsActive(15));
+
+      const t2 = ptlTorus(50);
+      let maxErr = 0;
+      for (let i = 0; i < 50; i++) {
+        const dMajor = Math.hypot(t2.x[i], t2.y[i]);
+        maxErr = Math.max(maxErr, Math.abs(Math.hypot(dMajor - 3, t2.z[i]) - 1));
+      }
+      check("torus on-surface", maxErr < 0.01);
+
+      check("PTL chart R2→V", ptlChartForCarrier("R2") === "V");
+      check("PTL chart S2→Fib", ptlChartForCarrier("S2") === "Fib");
+      check("stack T2 PTL", buildStackCode("T2", "PTL", "P", "Vor") === "T2-V-P-Vor");
+      check("stack S2 PTL", buildStackCode("S2", "PTL", "P", "Vor") === "S2-Fib-P-Vor");
+
+      const cyl = ptlCylinder(80);
+      let cylErr = 0;
+      for (let i = 0; i < 80; i++) {
+        const r = Math.hypot(cyl.x[i], cyl.z[i]);
+        cylErr = Math.max(cylErr, Math.abs(r - CYL_RADIUS));
+      }
+      check("cylinder on-surface", cylErr < 1e-9);
+      check("cyl Hil≠PTL", hilbertCylinder(64).x[0] !== ptlCylinder(64).x[0] || hilbertCylinder(64).y[10] !== ptlCylinder(64).y[10]);
+
+      const hilT = hilbertTorus(1200, 3, 1, true);
+      check("hilbert torus fill", hilT.x.length >= 4096);
+      let uMin = TAU, uMax = 0, vMin = TAU, vMax = 0;
+      for (let i = 0; i < hilT.x.length; i++) {
+        const u = Math.atan2(hilT.y[i], hilT.x[i]);
+        const ring = Math.hypot(hilT.x[i], hilT.y[i]);
+        const v = Math.atan2(hilT.z[i], ring - 3);
+        if (u < uMin) uMin = u; if (u > uMax) uMax = u;
+        if (v < vMin) vMin = v; if (v > vMax) vMax = v;
+      }
+      check("hilbert UV span", uMax - uMin > 4 && vMax - vMin > 4);
+
+      const logT = logTorus(800);
+      let logPos = 0, logNeg = 0;
+      for (let i = 0; i < logT.z.length; i++) {
+        if (logT.z[i] >= 0) logPos++; else logNeg++;
+      }
+      check("log torus z balance", logPos > 300 && logNeg > 300);
+
+      console.info(`CME playground self-test: ${ok}/17 passed`);
+    }
+
+    function updateUI() {
+      const code = buildStackCode(state.carrier, state.trajectory, state.landmark, state.partition);
+      document.getElementById("stack-code").textContent = code;
+      document.getElementById("geom-text").textContent = carrierDisplayLabel(state.carrier, state.trajectory);
+      document.getElementById("tier-text").textContent = inferTier(code);
+      document.getElementById("nVal").textContent =
+        state.renderN === state.n ? String(state.renderN) : `${state.n}→${state.renderN}`;
+      document.getElementById("sizeVal").textContent = state.pointSize.toFixed(1);
+    }
+
+    function resize() {
+      const w = wrap.clientWidth, h = wrap.clientHeight;
+      renderer.setSize(w, h, false);
+      camera.aspect = w / h;
+      camera.updateProjectionMatrix();
+    }
+
+    window.addEventListener("resize", resize);
+    resize();
+
+    function syncForm() {
+      document.getElementById("carrier").value = state.carrier;
+      document.getElementById("trajectory").value = state.trajectory;
+      document.getElementById("landmark").value = state.landmark;
+      document.getElementById("partition").value = state.partition;
+      document.getElementById("colorMode").value = state.colorMode;
+      document.getElementById("nPoints").value = state.n;
+      document.getElementById("pointSize").value = state.pointSize;
+      setToggle("tog-landmarks", state.showLandmarks);
+      setToggle("tog-wire", state.showWire);
+      setToggle("tog-spin", state.spin);
+    }
+
+    function setToggle(id, on) {
+      const el = document.getElementById(id);
+      el.classList.toggle("on", on);
+      el.setAttribute("aria-checked", on);
+    }
+
+    function bindSelect(id, key) {
+      document.getElementById(id).addEventListener("change", e => {
+        state[key] = e.target.value;
+        rebuildPoints();
+      });
+    }
+    bindSelect("carrier", "carrier");
+    bindSelect("trajectory", "trajectory");
+    bindSelect("landmark", "landmark");
+    bindSelect("colorMode", "colorMode");
+
+    document.getElementById("partition").addEventListener("change", e => {
+      state.partition = e.target.value;
+      if (state.partition === "Geo" || state.partition === "NVI" || state.partition === "Vor") {
+        state.colorMode = "partition";
+        document.getElementById("colorMode").value = "partition";
+      }
+      rebuildPoints();
+    });
+
+    document.getElementById("nPoints").addEventListener("input", e => {
+      state.n = parseInt(e.target.value, 10);
+      rebuildPoints();
+    });
+
+    document.getElementById("pointSize").addEventListener("input", e => {
+      state.pointSize = parseFloat(e.target.value);
+      rebuildPoints();
+    });
+
+    function bindToggle(id, key, rebuild = true) {
+      document.getElementById(id).addEventListener("click", () => {
+        state[key] = !state[key];
+        setToggle(id, state[key]);
+        if (rebuild) rebuildPoints();
+      });
+    }
+    bindToggle("tog-landmarks", "showLandmarks");
+    bindToggle("tog-wire", "showWire");
+    bindToggle("tog-spin", "spin", false);
+
+    const clock = new THREE.Clock();
+    function animate() {
+      requestAnimationFrame(animate);
+      if (state.spin) {
+        const t = clock.getElapsedTime();
+        const r = camera.position.distanceTo(controls.target);
+        camera.position.x = controls.target.x + r * Math.cos(t * 0.2);
+        camera.position.z = controls.target.z + r * Math.sin(t * 0.2);
+        camera.lookAt(controls.target);
+      }
+      controls.update();
+      renderer.render(scene, camera);
+    }
+
+    syncForm();
+    selfTest();
+    rebuildPoints();
+    animate();
+  </script>
+</body>
+</html>
