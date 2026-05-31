@@ -17,7 +17,7 @@ Interactive 3D visualization of **Carrier Manifold Encoding (P00)** stack combin
 <p align="center"><strong><a href="https://ivlovric.github.io/CME-Playground/">▶ Open interactive demo</a></strong></p>
 <!-- embed:end -->
 
-> GitHub **ne prikazuje** `<iframe>` u README-u (sigurnosni filter). Preview slika + link je jedini način da se demo vidi odmah na GitHubu. Nakon forka: `./scripts/update-readme-embed.sh`
+> GitHub **ne prikazuje** `<iframe>` u README-u. Preview slika + link vodi na GitHub Pages. Ako link vraća 404: **Settings → Pages → Build and deployment → Source: GitHub Actions**, zatim push na `main` (workflow `.github/workflows/pages.yml` deploya automatski).
 
 ## Files
 
@@ -26,5 +26,6 @@ Interactive 3D visualization of **Carrier Manifold Encoding (P00)** stack combin
 | `index.html` | Full app — served as the Pages entry point |
 | `preview.png` | Screenshot for README (clickable → live demo) |
 | `scripts/update-readme-embed.sh` | Rewrites the preview block in this README from `git remote origin` |
+| `.github/workflows/pages.yml` | Auto-deploy to GitHub Pages on push to `main` |
 
 Keeping `index.html` at repo root gives a clean Pages URL (`github.io/repo/`). You can rename to `cme-playground.html` if you prefer an explicit filename, but then set that file as the Pages entry or link to it directly.
