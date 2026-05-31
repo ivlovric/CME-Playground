@@ -120,7 +120,10 @@
         <h1>CME Geometric Contrast Analysis</h1>
         <div class="sub">P00 Carrier Manifold Encoding — interactive stack explorer</div>
       </div>
-      <div class="stack-badge" id="stack-code">T2-V-P-Vor</div>
+      <div style="display:flex;gap:8px;align-items:center;">
+        <button id="btn-reset-cam" title="Reset camera to default view" style="background:#21262d;border:1px solid var(--border);color:var(--muted);border-radius:8px;padding:5px 10px;font-size:0.75rem;cursor:pointer;line-height:1;">⌖ Reset view</button>
+        <div class="stack-badge" id="stack-code">T2-V-P-Vor</div>
+      </div>
     </header>
 
     <div id="canvas-wrap"></div>
@@ -831,6 +834,7 @@
     let partitionGroup = new THREE.Group();
     const carrierGroup = new THREE.Group();
     let cameraFittedOnce = false;
+    let lastFittedCarrier = null;
     contentGroup.add(partitionGroup);
     contentGroup.add(carrierGroup);
 
@@ -1107,9 +1111,10 @@
 
       makeCarrierOutline(state.carrier, n);
       updateGridForCarrier();
-      if (!cameraFittedOnce) {
+      if (!cameraFittedOnce || state.carrier !== lastFittedCarrier) {
         fitCamera(pos);
         cameraFittedOnce = true;
+        lastFittedCarrier = state.carrier;
       }
       state.renderN = n;
       updateUI();
@@ -1145,6 +1150,15 @@
         camera.position.set(center.x, center.y + dist, center.z + dist * 0.15);
         controls.minDistance = dist * 0.25;
         controls.maxDistance = dist * 4;
+      } else if (state.carrier === "S2") {
+        const dist = Math.max(radius * 2.4, 3.5);
+        camera.position.set(
+          center.x + dist * 0.55,
+          center.y + dist * 0.42,
+          center.z + dist * 0.65,
+        );
+        controls.minDistance = dist * 0.2;
+        controls.maxDistance = dist * 8;
       } else {
         const dist = Math.max(radius * 2.4, 6);
         camera.position.set(
@@ -1346,6 +1360,12 @@
       controls.update();
       renderer.render(scene, camera);
     }
+
+    document.getElementById("btn-reset-cam").addEventListener("click", () => {
+      const pos = computeTrajectory(state.carrier, state.trajectory, state.n);
+      lastFittedCarrier = null;
+      fitCamera(pos);
+    });
 
     syncForm();
     updateFooter();
