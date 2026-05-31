@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>CME P00 — Interactive Playground</title>
+  <title>CME — Interactive Playground</title>
   <style>
     :root {
       --bg: #0d1117;
@@ -117,8 +117,8 @@
   <div class="app">
     <header>
       <div>
-        <h1>CME Geometric Contrast Analysis</h1>
-        <div class="sub">P00 Carrier Manifold Encoding — interactive stack explorer</div>
+        <h1>CME — Carrier Manifold Encoding</h1>
+        <div class="sub">Geometric Contrast Analysis — interactive stack explorer</div>
       </div>
       <div style="display:flex;gap:8px;align-items:center;">
         <button id="btn-reset-cam" title="Reset camera to default view" style="background:#21262d;border:1px solid var(--border);color:var(--muted);border-radius:8px;padding:5px 10px;font-size:0.75rem;cursor:pointer;line-height:1;">⌖ Reset view</button>
@@ -131,7 +131,7 @@
     <div class="status-row">
       <div class="status-cell"><div class="label">Status</div><div class="value" id="status-text">Live</div></div>
       <div class="status-cell"><div class="label">Carrier</div><div class="value" id="geom-text">Torus 𝕋²</div></div>
-      <div class="status-cell"><div class="label">Tier</div><div class="value" id="tier-text">Core §2.7</div></div>
+      <div class="status-cell"><div class="label">Tier</div><div class="value" id="tier-text">Core</div></div>
     </div>
 
     <div class="controls">
@@ -284,9 +284,9 @@
 
     function inferTier(code) {
       const core = new Set(["T2-V-P-Vor", "R2-V-P-Vor", "S2-Fib-P-Vor"]);
-      if (core.has(code)) return "Core §2.7";
-      if (code.includes("NVI")) return "Open §6.3";
-      if (code.includes("Hil") || code.includes("Ben") || code.includes("Geo") || code.includes("Log")) return "Open §2.4";
+      if (core.has(code)) return "Core";
+      if (code.includes("NVI")) return "Open";
+      if (code.includes("Hil") || code.includes("Ben") || code.includes("Geo") || code.includes("Log")) return "Open";
       return "Custom";
     }
 
@@ -1263,7 +1263,7 @@
         ? `<a href="${PAPER_URL}" target="_blank" rel="noopener noreferrer">paper</a>`
         : "paper forthcoming";
       document.getElementById("app-footer").innerHTML =
-        `© ${year} · P00 CME · ${paper} · Three.js · drag to orbit · scroll to zoom`;
+        `© ${year} · CME · ${paper} · Three.js · drag to orbit · scroll to zoom`;
     }
 
     function updateUI() {
