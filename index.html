@@ -25,7 +25,7 @@
     .stack-badge { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.82rem; background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 6px 12px; color: var(--accent); }
     #canvas-wrap { position: relative; flex: 1; min-height: 340px; border: 1px solid var(--border); border-radius: 12px; overflow: hidden; background: #010409; }
     #canvas-wrap canvas { display: block; width: 100%; height: 100%; touch-action: none; }
-    .status-row { display: grid; grid-template-columns: repeat(3, 1fr); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; background: var(--panel); }
+    .status-row { display: grid; grid-template-columns: repeat(2, 1fr); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; background: var(--panel); }
     .status-cell { padding: 10px 14px; border-right: 1px solid var(--border); }
     .status-cell:last-child { border-right: none; }
     .status-cell .label { font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); margin-bottom: 3px; }
@@ -131,7 +131,6 @@
     <div class="status-row">
       <div class="status-cell"><div class="label">Status</div><div class="value" id="status-text">Live</div></div>
       <div class="status-cell"><div class="label">Carrier</div><div class="value" id="geom-text">Torus 𝕋²</div></div>
-      <div class="status-cell"><div class="label">Tier</div><div class="value" id="tier-text">Core</div></div>
     </div>
 
     <div class="controls">
@@ -139,10 +138,11 @@
         <div class="control-cell">
           <label for="carrier">Carrier</label>
           <select id="carrier">
-            <option value="T2">T2 — Torus 𝕋²</option>
             <option value="R2">R2 — Plane ℝ²</option>
             <option value="S2">S2 — Sphere S²</option>
+            <option value="T2">T2 — Torus 𝕋²</option>
             <option value="Cyl">Cyl — Cylinder S¹×ℝ</option>
+            <option value="H2">H² — Hyperbolic ℍ²</option>
           </select>
         </div>
         <div class="control-cell">
@@ -221,7 +221,7 @@
       </div>
     </div>
     <footer id="app-footer">
-      © 2026 · P00 CME · Three.js · drag to orbit · scroll to zoom
+      © 2026 · CME · Three.js · drag to orbit · scroll to zoom
     </footer>
   </div>
 
@@ -247,6 +247,8 @@
     const VOR_N = 16;
     const CYL_HEIGHT = 2.5;
     const CYL_RADIUS = 1.0;
+    /** Upper sheet hyperboloid x²+z²−y²=−1 (Y-up); ρ = geodesic radius from vertex. */
+    const H2_RHO_MAX = 2.2;
 
     // High-contrast partition palette (Geo / NVI / Vor tubes)
     const PARTITION_PALETTE = [
@@ -282,19 +284,12 @@
       return 16;
     }
 
-    function inferTier(code) {
-      const core = new Set(["T2-V-P-Vor", "R2-V-P-Vor", "S2-Fib-P-Vor"]);
-      if (core.has(code)) return "Core";
-      if (code.includes("NVI")) return "Open";
-      if (code.includes("Hil") || code.includes("Ben") || code.includes("Geo") || code.includes("Log")) return "Open";
-      return "Custom";
-    }
-
     const CARRIER_NAMES = {
       R2: "Plane ℝ²",
-      T2: "Torus 𝕋²",
       S2: "Sphere S²",
+      T2: "Torus 𝕋²",
       Cyl: "Cylinder S¹×ℝ",
+      H2: "Hyperbolic ℍ²",
     };
 
     /** P00 §2.2: one PTL (golden φ); chart token per carrier — V on ℝ²/𝕋²/Cyl, Fib on S². */
@@ -330,6 +325,25 @@
     function embedSphere(theta, lam) {
       const sinT = Math.sin(theta);
       return [sinT * Math.cos(lam), Math.cos(theta), sinT * Math.sin(lam)];
+    }
+
+    /** ℍ² → upper hyperboloid sheet (Minkowski lift), geodesic radius ρ ≥ 0, azimuth θ. */
+    function embedHyperbolic(theta, rho) {
+      const sr = Math.sinh(rho);
+      return [sr * Math.cos(theta), Math.cosh(rho), sr * Math.sin(theta)];
+    }
+
+    function hyperbolicRhoForIndex(i, n, rhoMax = H2_RHO_MAX) {
+      if (n <= 1) return 0;
+      const t = i / (n - 1);
+      const cMax = Math.cosh(rhoMax);
+      return Math.acosh(1 + t * (cMax - 1));
+    }
+
+    function hyperbolicAnglesFromXYZ(x, y, z) {
+      const rho = Math.asinh(Math.hypot(x, z));
+      const theta = ((Math.atan2(z, x) % TAU) + TAU) % TAU;
+      return { theta, rho };
     }
 
     function ptlPlanar(n) {
@@ -405,6 +419,46 @@
         x.push(a); y.push(b); z.push(c);
       }
       return { x, y, z, is3d: true, carrierKey: "cylinder" };
+    }
+
+    function ptlHyperbolic(n, rhoMax = H2_RHO_MAX) {
+      const x = [], y = [], z = [];
+      for (let i = 1; i <= n; i++) {
+        const theta = (i * GOLDEN) % TAU;
+        const rho = hyperbolicRhoForIndex(i - 1, n, rhoMax);
+        const [a, b, c] = embedHyperbolic(theta, rho);
+        x.push(a); y.push(b); z.push(c);
+      }
+      return { x, y, z, is3d: true, carrierKey: "hyperbolic" };
+    }
+
+    function hilbertHyperbolic(n, rhoMax = H2_RHO_MAX, fillGrid = false) {
+      const { order, grid, count } = hilbertLayout(n, fillGrid);
+      const x = [], y = [], z = [];
+      const cMax = Math.cosh(rhoMax);
+      for (let i = 0; i < count; i++) {
+        const [hx, hy] = hilbertXY(i, order);
+        const theta = TAU * (hx + 0.5) / grid;
+        const t = (hy + 0.5) / grid;
+        const rho = Math.acosh(1 + t * (cMax - 1));
+        const [a, b, c] = embedHyperbolic(theta, rho);
+        x.push(a); y.push(b); z.push(c);
+      }
+      return { x, y, z, is3d: true, carrierKey: "hyperbolic" };
+    }
+
+    function logHyperbolic(n, rhoMax = H2_RHO_MAX) {
+      const x = [], y = [], z = [];
+      const denom = Math.log1p(Math.max(n - 1, 1));
+      const cMax = Math.cosh(rhoMax);
+      for (let i = 0; i < n; i++) {
+        const theta = (i * GOLDEN) % TAU;
+        const t = Math.log1p(i) / denom;
+        const rho = Math.acosh(1 + t * (cMax - 1));
+        const [a, b, c] = embedHyperbolic(theta, rho);
+        x.push(a); y.push(b); z.push(c);
+      }
+      return { x, y, z, is3d: true, carrierKey: "hyperbolic" };
     }
 
     function hilbertOrder(n) {
@@ -523,11 +577,17 @@
         "Cyl-V": () => ptlCylinder(n),
         "Cyl-Hil": () => hilbertCylinder(n, CYL_HEIGHT, hilFill),
         "Cyl-Log": () => logCylinder(n),
+        "H2-V": () => ptlHyperbolic(n),
+        "H2-Hil": () => hilbertHyperbolic(n, H2_RHO_MAX, hilFill),
+        "H2-Log": () => logHyperbolic(n),
       };
       const fn = map[`${carrier}-${chart}`];
       if (!fn) {
         console.warn(`No trajectory ${carrier}-${chart}; falling back to PTL.`);
-        return ptlTorus(n);
+        const fallback = {
+          R2: ptlPlanar, T2: ptlTorus, S2: fibSphere, Cyl: ptlCylinder, H2: ptlHyperbolic,
+        };
+        return (fallback[carrier] || ptlTorus)(n);
       }
       return fn();
     }
@@ -580,6 +640,13 @@
       const u = ((Math.atan2(z, x) % TAU) + TAU) % TAU;
       const v01 = (y + height / 2) / height;
       return { u, v01 };
+    }
+
+    function hyperbolicUVFromXYZ(x, y, z, rhoMax = H2_RHO_MAX) {
+      const { theta, rho } = hyperbolicAnglesFromXYZ(x, y, z);
+      const cMax = Math.cosh(rhoMax);
+      const v01 = cMax > 1 ? (Math.cosh(rho) - 1) / (cMax - 1) : 0;
+      return { u: theta, v01 };
     }
 
     /** k seeds on chart domain of M (spatial geodesic bins — not index bands). */
@@ -646,6 +713,15 @@
       if (carrierKey === "cylinder") {
         return geoSpatialSeedGrid(k).map(cell => {
           const [a, b, c] = embedCylinder(cell.u, cell.v01);
+          const [px, py, pz] = toSceneCoords(a, b, c, true);
+          return new THREE.Vector3(px, py, pz);
+        });
+      }
+      if (carrierKey === "hyperbolic") {
+        const cMax = Math.cosh(H2_RHO_MAX);
+        return geoSpatialSeedGrid(k).map(cell => {
+          const rho = Math.acosh(1 + cell.v01 * (cMax - 1));
+          const [a, b, c] = embedHyperbolic(cell.u, rho);
           const [px, py, pz] = toSceneCoords(a, b, c, true);
           return new THREE.Vector3(px, py, pz);
         });
@@ -718,6 +794,27 @@
         const uArr = [], vArr = [];
         for (let i = 0; i < n; i++) {
           const uv = cylinderUVFromXYZ(x[i], y[i], z[i]);
+          uArr.push(uv.u);
+          vArr.push(uv.v01);
+        }
+        for (let i = 0; i < n; i++) {
+          let best = 0, bestD = Infinity;
+          for (let s = 0; s < seeds.length; s++) {
+            const du = periodicDelta(uArr[i], seeds[s].u);
+            const dv = Math.abs(vArr[i] - seeds[s].v01);
+            const d = Math.sqrt(du * du + dv * dv);
+            if (d < bestD) { bestD = d; best = s; }
+          }
+          regions[i] = best;
+        }
+        return regions;
+      }
+
+      if (carrierKey === "hyperbolic") {
+        const seeds = geoSpatialSeedGrid(k);
+        const uArr = [], vArr = [];
+        for (let i = 0; i < n; i++) {
+          const uv = hyperbolicUVFromXYZ(x[i], y[i], z[i]);
           uArr.push(uv.u);
           vArr.push(uv.v01);
         }
@@ -883,6 +980,35 @@
         const geo = new THREE.CylinderGeometry(CYL_RADIUS, CYL_RADIUS, CYL_HEIGHT, 48, 1, true);
         carrierGroup.add(new THREE.LineSegments(new THREE.EdgesGeometry(geo, 8), lineMat));
         geo.dispose();
+      } else if (carrier === "H2") {
+        const rhoMax = H2_RHO_MAX;
+        const nTheta = 56;
+        const nRho = 14;
+        const addLoop = pts => {
+          const g = new THREE.BufferGeometry().setFromPoints(pts);
+          carrierGroup.add(new THREE.LineLoop(g, lineMat));
+        };
+        for (let j = 0; j <= nRho; j++) {
+          const rho = rhoMax * j / nRho;
+          const pts = [];
+          for (let i = 0; i <= nTheta; i++) {
+            const t = (i / nTheta) * TAU;
+            const [a, b, c] = embedHyperbolic(t, rho);
+            pts.push(new THREE.Vector3(a, b, c));
+          }
+          addLoop(pts);
+        }
+        for (let i = 0; i < 16; i++) {
+          const t = (i / 16) * TAU;
+          const pts = [];
+          for (let j = 0; j <= nRho; j++) {
+            const rho = rhoMax * j / nRho;
+            const [a, b, c] = embedHyperbolic(t, rho);
+            pts.push(new THREE.Vector3(a, b, c));
+          }
+          const g = new THREE.BufferGeometry().setFromPoints(pts);
+          carrierGroup.add(new THREE.Line(g, lineMat));
+        }
       } else {
         const rMax = planarExtent(n, state.trajectory) * 1.05;
         const pts = [];
@@ -1125,7 +1251,7 @@
         grid.visible = true;
         grid.position.y = 0;
       } else {
-        grid.visible = state.carrier !== "S2";
+        grid.visible = state.carrier !== "S2" && state.carrier !== "H2";
         grid.position.y = state.carrier === "Cyl" ? -1.5 : -3.5;
       }
     }
@@ -1150,7 +1276,7 @@
         camera.position.set(center.x, center.y + dist, center.z + dist * 0.15);
         controls.minDistance = dist * 0.25;
         controls.maxDistance = dist * 4;
-      } else if (state.carrier === "S2") {
+      } else if (state.carrier === "S2" || state.carrier === "H2") {
         const dist = Math.max(radius * 2.4, 3.5);
         camera.position.set(
           center.x + dist * 0.55,
@@ -1215,6 +1341,15 @@
       check("PTL chart S2→Fib", ptlChartForCarrier("S2") === "Fib");
       check("stack T2 PTL", buildStackCode("T2", "PTL", "P", "Vor") === "T2-V-P-Vor");
       check("stack S2 PTL", buildStackCode("S2", "PTL", "P", "Vor") === "S2-Fib-P-Vor");
+      check("stack H2 PTL", buildStackCode("H2", "PTL", "P", "Vor") === "H2-V-P-Vor");
+
+      const h2 = ptlHyperbolic(60);
+      let h2Err = 0;
+      for (let i = 0; i < 60; i++) {
+        h2Err = Math.max(h2Err, Math.abs(h2.x[i] * h2.x[i] + h2.z[i] * h2.z[i] - h2.y[i] * h2.y[i] + 1));
+      }
+      check("hyperboloid on-surface", h2Err < 1e-8);
+      check("h2 Hil≠PTL", hilbertHyperbolic(64).x[0] !== h2.x[0] || hilbertHyperbolic(64).z[10] !== h2.z[10]);
 
       const cyl = ptlCylinder(80);
       let cylErr = 0;
@@ -1244,7 +1379,7 @@
       }
       check("log torus z balance", logPos > 300 && logNeg > 300);
 
-      const total = 17;
+      const total = 20;
       console.info(`CME playground self-test: ${ok}/${total} passed`);
       if (ok === total) console.log("✅ All sanity checks passed");
     }
@@ -1270,7 +1405,6 @@
       const code = buildStackCode(state.carrier, state.trajectory, state.landmark, state.partition);
       document.getElementById("stack-code").textContent = code;
       document.getElementById("geom-text").textContent = carrierDisplayLabel(state.carrier, state.trajectory);
-      document.getElementById("tier-text").textContent = inferTier(code);
       document.getElementById("nVal").textContent =
         state.renderN === state.n ? String(state.renderN) : `${state.n}→${state.renderN}`;
       document.getElementById("sizeVal").textContent = state.pointSize.toFixed(1);
